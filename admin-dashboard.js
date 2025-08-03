@@ -411,7 +411,7 @@ app.get('/', (req, res) => {
 
 // Iniciar servidor
 app.listen(PORT, () => {
-    console.log(\`✅ Panel de administración disponible en http://localhost:\${PORT}\`);
+    console.log(`✅ Panel de administración disponible en http://localhost:${PORT}`);
 });
 
 module.exports = { registrarMensaje };
