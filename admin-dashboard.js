@@ -409,9 +409,11 @@ app.get('/', (req, res) => {
     `);
 });
 
-// Iniciar servidor
-app.listen(PORT, () => {
-    console.log(`✅ Panel de administración disponible en http://localhost:${PORT}`);
-});
+// Iniciar servidor solo si se ejecuta directamente
+if (require.main === module) {
+    app.listen(PORT, () => {
+        console.log(`✅ Panel de administración disponible en http://localhost:${PORT}`);
+    });
+}
 
 module.exports = { registrarMensaje };
