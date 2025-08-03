@@ -1,20 +1,35 @@
 {
   "name": "whatsapp-universidad",
   "version": "1.0.0",
+  "description": "Sistema de WhatsApp con IA para redirección de consultas universitarias",
   "main": "index.js",
   "scripts": {
+    "start": "node start.js",
+    "bot": "node index.js",
+    "admin": "node admin-dashboard.js",
+    "monitor": "node monitor.js",
+    "dev": "concurrently \"npm run bot\" \"npm run admin\"",
+    "health": "node monitor.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "whatsapp",
+    "bot",
+    "universidad",
+    "ai",
+    "openai"
+  ],
+  "author": "Universidad",
   "license": "ISC",
-  "description": "",
   "dependencies": {
-    "dotenv": "^17.2.1",
-    "express": "^5.1.0",
-    "openai": "^5.11.0",
+    "whatsapp-web.js": "^1.23.0",
+    "openai": "^4.0.0",
     "qrcode-terminal": "^0.12.0",
-    "sqlite3": "^5.1.7",
-    "whatsapp-web.js": "^1.31.0"
+    "dotenv": "^16.0.3",
+    "express": "^4.18.2",
+    "sqlite3": "^5.1.6"
+  },
+  "devDependencies": {
+    "concurrently": "^8.0.1"
   }
 }

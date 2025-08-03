@@ -213,7 +213,7 @@ async function clasificarMensaje(mensaje) {
         // Si no hay coincidencia clara, usar IA
         console.log('🤖 Usando IA para clasificación...');
         const completion = await openai.chat.completions.create({
-            model: "gpt-3.5-turbo",
+            model: "gpt-4.1-mini",
             messages: [
                 { role: "system", content: SYSTEM_PROMPT },
                 { role: "user", content: mensaje }
