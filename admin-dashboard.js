@@ -114,104 +114,260 @@ app.get('/', (req, res) => {
         
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f5f5f5;
+            background: #f0f2f5;
             color: #333;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
         }
         
         header {
             background: #075e54;
             color: white;
-            padding: 1rem 2rem;
+            padding: 0.75rem 1.5rem;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            flex-shrink: 0;
         }
         
-        .container {
-            max-width: 1200px;
+        header h1 {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+        
+        .main-container {
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            padding: 1rem;
+            max-width: 1400px;
+            width: 100%;
             margin: 0 auto;
-            padding: 2rem;
         }
         
-        .stats-grid {
+        /* Sección superior: estadísticas y gráficos */
+        .top-section {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 2rem;
+            grid-template-columns: 200px 1fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            height: 240px;
+        }
+        
+        /* Estadísticas verticales */
+        .stats-column {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
         }
         
         .stat-card {
             background: white;
-            padding: 1.5rem;
+            padding: 0.75rem 1rem;
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            transition: transform 0.2s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            transition: all 0.2s;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
         
         .stat-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
         }
         
         .stat-value {
-            font-size: 2.5rem;
+            font-size: 1.5rem;
             font-weight: bold;
             color: #075e54;
+            line-height: 1;
         }
         
         .stat-label {
             color: #666;
-            margin-top: 0.5rem;
+            font-size: 0.75rem;
+            margin-top: 0.25rem;
+        }
+        
+        /* Contenedor de gráficos */
+        .charts-row {
+            display: grid;
+            grid-template-columns: 1fr 1.5fr;
+            gap: 1rem;
+            height: 100%;
         }
         
         .chart-container {
             background: white;
-            padding: 2rem;
+            padding: 1rem;
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
         }
         
-        .messages-table {
+        .chart-container h2 {
+            font-size: 0.875rem;
+            color: #555;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+        
+        .chart-wrapper {
+            flex: 1;
+            position: relative;
+            min-height: 0;
+        }
+        
+        /* Tabla de mensajes */
+        .messages-section {
+            flex: 1;
             background: white;
             border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+        
+        .messages-header {
+            padding: 0.75rem 1rem;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e0e0e0;
+            border-radius: 8px 8px 0 0;
+        }
+        
+        .messages-header h2 {
+            font-size: 0.875rem;
+            color: #555;
+            font-weight: 600;
+        }
+        
+        .table-container {
+            flex: 1;
+            overflow: auto;
         }
         
         table {
             width: 100%;
             border-collapse: collapse;
+            font-size: 0.813rem;
         }
         
         th {
             background: #075e54;
             color: white;
-            padding: 1rem;
+            padding: 0.5rem 0.75rem;
             text-align: left;
+            font-weight: 500;
+            position: sticky;
+            top: 0;
+            z-index: 10;
         }
         
         td {
-            padding: 1rem;
-            border-bottom: 1px solid #eee;
+            padding: 0.5rem 0.75rem;
+            border-bottom: 1px solid #f0f0f0;
         }
         
         tr:hover {
-            background: #f9f9f9;
+            background: #f8fafb;
+        }
+        
+        /* Columna de fecha más estrecha */
+        th:first-child, td:first-child {
+            width: 120px;
+        }
+        
+        /* Columna de número más estrecha */
+        th:nth-child(2), td:nth-child(2) {
+            width: 100px;
+        }
+        
+        /* Columna de estado más estrecha */
+        th:last-child, td:last-child {
+            width: 100px;
+            text-align: center;
         }
         
         .status-badge {
             display: inline-block;
-            padding: 0.25rem 0.75rem;
-            border-radius: 12px;
-            font-size: 0.875rem;
+            padding: 0.2rem 0.5rem;
+            border-radius: 10px;
+            font-size: 0.75rem;
             font-weight: 500;
         }
         
-        .badge-cajas { background: #fee; color: #c33; }
-        .badge-plataforma { background: #eef; color: #33c; }
-        .badge-registro { background: #efe; color: #3c3; }
-        .badge-bienestar { background: #fef; color: #c3c; }
-        .badge-biblioteca { background: #ffe; color: #cc3; }
-        .badge-general { background: #eee; color: #666; }
+        .badge-cajas { background: #fee0e0; color: #c33; }
+        .badge-plataforma { background: #e0e0fe; color: #33c; }
+        .badge-registro { background: #e0fee0; color: #3c3; }
+        .badge-bienestar { background: #fee0fe; color: #c3c; }
+        .badge-biblioteca { background: #fffde0; color: #cc3; }
+        .badge-general { background: #e8e8e8; color: #666; }
+        
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .top-section {
+                grid-template-columns: 1fr;
+                height: auto;
+            }
+            
+            .stats-column {
+                flex-direction: row;
+                flex-wrap: wrap;
+            }
+            
+            .stat-card {
+                flex: 1 1 calc(25% - 0.75rem);
+                min-width: 140px;
+            }
+            
+            .charts-row {
+                grid-template-columns: 1fr;
+                height: 400px;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .main-container {
+                padding: 0.5rem;
+            }
+            
+            .stat-card {
+                flex: 1 1 calc(50% - 0.5rem);
+            }
+            
+            th, td {
+                padding: 0.4rem 0.5rem;
+                font-size: 0.75rem;
+            }
+            
+            th:nth-child(3), td:nth-child(3) {
+                display: none; /* Ocultar columna mensaje en móvil */
+            }
+        }
+        
+        /* Scrollbar personalizada */
+        .table-container::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        
+        .table-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        
+        .table-container::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+        
+        .table-container::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
     </style>
 </head>
 <body>
@@ -219,54 +375,69 @@ app.get('/', (req, res) => {
         <h1>🎓 WhatsApp Universidad - Panel de Control</h1>
     </header>
     
-    <div class="container">
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-value" id="totalMensajes">0</div>
-                <div class="stat-label">Total de Mensajes</div>
+    <div class="main-container">
+        <div class="top-section">
+            <!-- Columna de estadísticas -->
+            <div class="stats-column">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalMensajes">0</div>
+                    <div class="stat-label">Total Mensajes</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="mensajesHoy">0</div>
+                    <div class="stat-label">Mensajes Hoy</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="tiempoRespuesta">0s</div>
+                    <div class="stat-label">Tiempo Respuesta</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="tasaRedireccion">0%</div>
+                    <div class="stat-label">Redirección</div>
+                </div>
             </div>
-            <div class="stat-card">
-                <div class="stat-value" id="mensajesHoy">0</div>
-                <div class="stat-label">Mensajes Hoy</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" id="tiempoRespuesta">0s</div>
-                <div class="stat-label">Tiempo Promedio Respuesta</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" id="tasaRedireccion">0%</div>
-                <div class="stat-label">Tasa de Redirección</div>
+            
+            <!-- Gráficos -->
+            <div class="charts-row">
+                <div class="chart-container">
+                    <h2>Distribución por Departamento</h2>
+                    <div class="chart-wrapper">
+                        <canvas id="departamentosChart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="chart-container">
+                    <h2>Tendencia Semanal</h2>
+                    <div class="chart-wrapper">
+                        <canvas id="mensajesDiaChart"></canvas>
+                    </div>
+                </div>
             </div>
         </div>
         
-        <div class="chart-container">
-            <h2>Mensajes por Departamento</h2>
-            <canvas id="departamentosChart"></canvas>
-        </div>
-        
-        <div class="chart-container">
-            <h2>Mensajes por Día (Últimos 7 días)</h2>
-            <canvas id="mensajesDiaChart"></canvas>
-        </div>
-        
-        <div class="messages-table">
-            <h2 style="padding: 1rem; background: #f5f5f5;">Mensajes Recientes</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Fecha/Hora</th>
-                        <th>Número</th>
-                        <th>Mensaje</th>
-                        <th>Departamento</th>
-                        <th>Estado</th>
-                    </tr>
-                </thead>
-                <tbody id="mensajesRecientes">
-                    <tr>
-                        <td colspan="5" style="text-align: center; color: #999;">Cargando mensajes...</td>
-                    </tr>
-                </tbody>
-            </table>
+        <!-- Tabla de mensajes -->
+        <div class="messages-section">
+            <div class="messages-header">
+                <h2>Mensajes Recientes</h2>
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Fecha/Hora</th>
+                            <th>Número</th>
+                            <th>Mensaje</th>
+                            <th>Departamento</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="mensajesRecientes">
+                        <tr>
+                            <td colspan="5" style="text-align: center; color: #999; padding: 2rem;">Cargando mensajes...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
     
@@ -316,11 +487,16 @@ app.get('/', (req, res) => {
                 const tbody = document.getElementById('mensajesRecientes');
                 tbody.innerHTML = mensajes.map(msg => \`
                     <tr>
-                        <td>\${new Date(msg.fecha_hora).toLocaleString()}</td>
-                        <td>\${msg.numero_origen}</td>
-                        <td>\${msg.mensaje.substring(0, 50)}...</td>
+                        <td>\${new Date(msg.fecha_hora).toLocaleString('es-BO', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        })}</td>
+                        <td>\${msg.numero_origen.slice(-8)}</td>
+                        <td title="\${msg.mensaje}">\${msg.mensaje.substring(0, 40)}...</td>
                         <td><span class="status-badge badge-\${msg.departamento_asignado.toLowerCase()}">\${msg.departamento_asignado}</span></td>
-                        <td>\${msg.respondido ? '✅ Respondido' : '⏳ Pendiente'}</td>
+                        <td>\${msg.respondido ? '✅' : '⏳'}</td>
                     </tr>
                 \`).join('');
                 
@@ -351,13 +527,24 @@ app.get('/', (req, res) => {
                             '#ffce56',
                             '#4bc0c0',
                             '#999999'
-                        ]
+                        ],
+                        borderWidth: 0
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    height: 300
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 10,
+                                font: {
+                                    size: 11
+                                }
+                            }
+                        }
+                    }
                 }
             });
         }
@@ -374,22 +561,47 @@ app.get('/', (req, res) => {
             mensajesDiaChart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: data.map(d => new Date(d.fecha).toLocaleDateString()),
+                    labels: data.map(d => {
+                        const fecha = new Date(d.fecha);
+                        return fecha.toLocaleDateString('es-BO', { weekday: 'short', day: 'numeric' });
+                    }),
                     datasets: [{
                         label: 'Mensajes',
                         data: data.map(d => d.cantidad),
                         borderColor: '#075e54',
                         backgroundColor: 'rgba(7, 94, 84, 0.1)',
-                        tension: 0.1
+                        tension: 0.3,
+                        borderWidth: 2,
+                        pointBackgroundColor: '#075e54',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                        pointRadius: 4,
+                        pointHoverRadius: 6
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    height: 300,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
                     scales: {
                         y: {
-                            beginAtZero: true
+                            beginAtZero: true,
+                            ticks: {
+                                font: {
+                                    size: 11
+                                }
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                font: {
+                                    size: 11
+                                }
+                            }
                         }
                     }
                 }
