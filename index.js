@@ -12,14 +12,17 @@ const openai = new OpenAI({
 });
 
 // ========== CONFIGURACIÓN ANTI-BLOQUEO ==========
-// Delays para parecer más humano (aumentados para ser más naturales)
+// Delays naturales correlativos al contenido
 const DELAYS = {
-    MIN_RESPONSE_TIME: 4000,  // 4 segundos mínimo
+    MIN_RESPONSE_TIME: 2000,  // 2 segundos mínimo
     MAX_RESPONSE_TIME: 8000,  // 8 segundos máximo
-    TYPING_TIME: 5000,        // 5 segundos "escribiendo"
-    READ_TIME: 2000,          // 2 segundos para "leer"
-    READ_TIME_PER_CHAR: 100,  // 100ms por carácter
-    MAX_READ_TIME: 6000,      // Máximo 6 segundos leyendo
+    READ_TIME_PER_CHAR: 60,   // 60ms por carácter (más rápido)
+    MIN_READ_TIME: 1000,      // Mínimo 1 segundo leyendo
+    MAX_READ_TIME: 4000,      // Máximo 4 segundos leyendo
+    TYPING_BASE: 2000,        // Base de escritura: 2 segundos
+    TYPING_PER_CHAR: 30,      // 30ms por carácter de respuesta
+    MIN_TYPING_TIME: 2000,    // Mínimo 2 segundos escribiendo
+    MAX_TYPING_TIME: 6000,    // Máximo 6 segundos escribiendo
 };
 
 // Límites diarios (ajustados para tu caso)
@@ -84,6 +87,34 @@ function getRandomElement(array) {
     return array[Math.floor(Math.random() * array.length)];
 }
 
+// Calcular tiempo de lectura natural basado en el contenido
+function calculateReadTime(message) {
+    const baseTime = Math.max(
+        message.length * DELAYS.READ_TIME_PER_CHAR,
+        DELAYS.MIN_READ_TIME
+    );
+    
+    // Añadir tiempo extra por complejidad
+    let complexityBonus = 0;
+    if (message.includes('\n')) complexityBonus += 500; // Múltiples líneas
+    if (/\d{7,8}/.test(message)) complexityBonus += 300; // Contiene CI
+    if (message.split(' ').length > 5) complexityBonus += 200; // Mensaje largo
+    
+    const totalTime = Math.min(baseTime + complexityBonus, DELAYS.MAX_READ_TIME);
+    return totalTime + Math.random() * 500; // Variación aleatoria
+}
+
+// Calcular tiempo de escritura natural basado en la respuesta
+function calculateTypingTime(responseLength) {
+    const baseTime = Math.max(
+        DELAYS.TYPING_BASE + (responseLength * DELAYS.TYPING_PER_CHAR),
+        DELAYS.MIN_TYPING_TIME
+    );
+    
+    const totalTime = Math.min(baseTime, DELAYS.MAX_TYPING_TIME);
+    return totalTime + Math.random() * 1000; // Variación aleatoria
+}
+
 function checkDailyLimit() {
     const today = new Date().toDateString();
     if (today !== lastResetDate) {
@@ -145,13 +176,14 @@ function updateStudentData(phoneNumber, updates) {
     return updatedData;
 }
 
-// Validaciones simplificadas
+// Extracción inteligente de datos (sin validación estricta)
 function parseStudentData(message) {
-    // Buscar patrones simples en el mensaje
-    const lines = message.split('\n').map(line => line.trim()).filter(line => line);
+    const text = message.trim();
+    
+    // Separar por líneas primero
+    const lines = text.split('\n').map(line => line.trim()).filter(line => line);
     
     if (lines.length >= 3) {
-        // Si tiene 3 o más líneas, asumir que es CI, Nombre, Carrera
         return {
             ci: lines[0],
             nombreCompleto: lines[1],
@@ -160,11 +192,44 @@ function parseStudentData(message) {
         };
     }
     
-    // Buscar patrones con separadores comunes
-    const separators = [',', '|', '-', ';'];
+    // Si es una sola línea, intentar separar por espacios inteligentemente
+    const words = text.split(' ').filter(w => w);
+    
+    if (words.length >= 4) {
+        // Asumir: primer elemento = CI, últimos 2-3 = carrera, resto = nombre
+        const ci = words[0];
+        
+        // Buscar índice donde podría empezar la carrera
+        let careerStartIndex = words.length - 2;
+        for (let i = 1; i < words.length - 1; i++) {
+            const word = words[i].toLowerCase();
+            if (word.includes('ingenier') || word.includes('medicina') || word.includes('derecho') || 
+                word.includes('administr') || word.includes('psicolog') || word.includes('arquitec') ||
+                word.includes('sistem') || word.includes('civil') || word.includes('industrial') ||
+                word.includes('comunicac')) {
+                careerStartIndex = i;
+                break;
+            }
+        }
+        
+        const nombreCompleto = words.slice(1, careerStartIndex).join(' ');
+        const carrera = words.slice(careerStartIndex).join(' ');
+        
+        if (nombreCompleto && carrera) {
+            return {
+                ci: ci,
+                nombreCompleto: nombreCompleto,
+                carrera: carrera,
+                valid: true
+            };
+        }
+    }
+    
+    // Intentar con separadores comunes
+    const separators = [',', '|', ';'];
     for (const sep of separators) {
-        if (message.includes(sep)) {
-            const parts = message.split(sep).map(p => p.trim()).filter(p => p);
+        if (text.includes(sep)) {
+            const parts = text.split(sep).map(p => p.trim()).filter(p => p);
             if (parts.length >= 3) {
                 return {
                     ci: parts[0],
@@ -174,6 +239,17 @@ function parseStudentData(message) {
                 };
             }
         }
+    }
+    
+    // Si no puede separar claramente, asumir que es válido de todos modos
+    // y dejar que el usuario lo corrija si es necesario
+    if (words.length >= 3) {
+        return {
+            ci: words[0],
+            nombreCompleto: words.slice(1, -1).join(' '),
+            carrera: words[words.length - 1],
+            valid: true
+        };
     }
     
     return { valid: false };
@@ -234,7 +310,7 @@ function generateCareerList() {
 const DEPARTAMENTOS = {
     CAJAS: {
         nombre: "Departamento de Cajas",
-        numero: "591XXXXXXXX", // Reemplazar con número real
+        numero: "59177439407", // Número actualizado
         palabrasClave: ["pago", "cuota", "mensualidad", "deuda", "factura", "recibo", "cancelar", "mora"],
         descripcion: "Pagos, cuotas, mensualidades, facturas"
     },
@@ -413,19 +489,16 @@ Por favor, indícame si necesitas ayuda con:
 
     const dept = DEPARTAMENTOS[departamento];
     
-    // Crear mensaje codificado para URL con datos del estudiante
-    let mensajeParaDepartamento = `🔔 Nueva consulta estudiantil\n\n`;
+    // Crear mensaje codificado para URL (versión más corta para mejor detección)
+    let mensajeParaDepartamento;
     
     if (studentData && studentData.ci && studentData.nombreCompleto && studentData.carrera) {
-        mensajeParaDepartamento += `👤 *DATOS DEL ESTUDIANTE:*\n`;
-        mensajeParaDepartamento += `📋 CI: ${studentData.ci}\n`;
-        mensajeParaDepartamento += `🎓 Nombre: ${studentData.nombreCompleto}\n`;
-        mensajeParaDepartamento += `📚 Carrera: ${studentData.carrera}\n\n`;
+        // Versión compacta con datos del estudiante
+        mensajeParaDepartamento = `🔔 Nueva consulta\n👤 ${studentData.nombreCompleto}\n📋 CI: ${studentData.ci}\n📚 ${studentData.carrera}\n💬 "${mensajeOriginal}"`;
+    } else {
+        // Versión básica sin datos
+        mensajeParaDepartamento = `🔔 Nueva consulta estudiantil\n💬 "${mensajeOriginal}"`;
     }
-    
-    mensajeParaDepartamento += `📝 Consulta: "${mensajeOriginal}"\n`;
-    mensajeParaDepartamento += `🏷️ Clasificación: ${departamento}\n\n`;
-    mensajeParaDepartamento += `Por favor, atender a la brevedad.`;
     
     const mensajeCodificado = encodeURIComponent(mensajeParaDepartamento);
     
@@ -443,22 +516,19 @@ Por favor, indícame si necesitas ayuda con:
 📋 *${dept.nombre}*
 📝 *Tu consulta:* "${mensajeOriginal}"${datosEnviados}
 
-🔗 *Haz clic aquí para ir al chat:*
+🔗 *Enlace directo:*
 ${enlaceWhatsApp}
 
-También puedes copiar este número: ${dept.numero}
-
+📱 *Número:* ${dept.numero}
 ⏰ *Horario:* Lun-Vie 8:00-18:00 | Sáb 8:00-12:00`,
 
         `${saludo} ${transicion} necesitas comunicarte con ${dept.nombre}.
 
-Te comparto el enlace directo:
+💬 *Tu consulta:* "${mensajeOriginal}"${datosEnviados}
+
 🔗 ${enlaceWhatsApp}
 
-💬 *Tu consulta:* "${mensajeOriginal}"${datosEnviados}
-📱 *WhatsApp directo:* ${dept.numero}
-
-Ellos podrán ayudarte con tu consulta.
+📱 *WhatsApp:* ${dept.numero}
 *Atención:* L-V 8am-6pm | S 8am-12pm`
     ];
     
@@ -545,15 +615,10 @@ Tu mensaje será atendido en el próximo horario hábil. ¡Gracias! 😊`);
         // Obtener datos actuales del estudiante
         let studentData = getStudentData(phoneNumber);
         
-        // Simular tiempo de lectura más natural
-        const readTime = Math.min(messageText.length * DELAYS.READ_TIME_PER_CHAR, DELAYS.MAX_READ_TIME);
-        console.log(`   ⏱️ Simulando lectura: ${readTime}ms`);
+        // Simular tiempo de lectura natural
+        const readTime = calculateReadTime(messageText);
+        console.log(`   👀 Leyendo mensaje (${messageText.length} chars): ${Math.round(readTime)}ms`);
         await new Promise(resolve => setTimeout(resolve, readTime));
-        
-        await chat.sendStateTyping();
-        const typingTime = getRandomDelay(DELAYS.TYPING_TIME - 1000, DELAYS.TYPING_TIME + 2000);
-        console.log(`   ⌨️ Simulando escritura: ${typingTime}ms`);
-        await new Promise(resolve => setTimeout(resolve, typingTime));
 
         // Manejar comando especial para ver carreras
         if (messageText.toLowerCase() === 'carreras') {
@@ -567,10 +632,11 @@ Tu mensaje será atendido en el próximo horario hábil. ¡Gracias! 😊`);
             const departamento = await clasificarMensaje(messageText);
             console.log(`   Departamento asignado: ${departamento}`);
             
+            let response;
             if (departamento === 'GENERAL') {
                 // Mensaje general, no necesita datos del estudiante
                 const { respuesta } = generarMensajeRedireccion(departamento, messageText);
-                await message.reply(respuesta);
+                response = respuesta;
             } else {
                 // Necesita redirección, solicitar datos en un solo mensaje
                 studentData = updateStudentData(phoneNumber, {
@@ -579,33 +645,49 @@ Tu mensaje será atendido en el próximo horario hábil. ¡Gracias! 😊`);
                     departamentoAsignado: departamento
                 });
                 
-                const response = generateDataCollectionMessage(departamento);
-                await message.reply(response);
+                response = generateDataCollectionMessage(departamento);
             }
+            
+            // Calcular tiempo de escritura basado en la respuesta
+            await chat.sendStateTyping();
+            const typingTime = calculateTypingTime(response.length);
+            console.log(`   ⌨️ Escribiendo respuesta (${response.length} chars): ${Math.round(typingTime)}ms`);
+            await new Promise(resolve => setTimeout(resolve, typingTime));
+            
+            await message.reply(response);
             
         } else if (studentData.state === CONVERSATION_STATES.WAITING_CI) {
             // Segundo mensaje: Intentar extraer todos los datos
             const parsedData = parseStudentData(messageText);
             
+            let response;
             if (parsedData.valid) {
                 // Datos encontrados, procesar redirección
                 console.log('   ✅ Datos del estudiante extraídos correctamente');
+                console.log(`   📋 CI: ${parsedData.ci}`);
+                console.log(`   🎓 Nombre: ${parsedData.nombreCompleto}`);
+                console.log(`   📚 Carrera: ${parsedData.carrera}`);
                 
                 studentData.ci = parsedData.ci;
                 studentData.nombreCompleto = parsedData.nombreCompleto;
                 studentData.carrera = findBestCareerMatch(parsedData.carrera);
                 studentData.state = CONVERSATION_STATES.READY_TO_REDIRECT;
                 
-                // Delay adicional antes de la redirección
-                await new Promise(resolve => setTimeout(resolve, getRandomDelay(2000, 4000)));
-                
                 const { respuesta, redirigir, numeroDestino } = generarMensajeRedireccion(
                     studentData.departamentoAsignado, 
                     studentData.consultaOriginal,
                     studentData
                 );
+                
+                response = respuesta;
+                
+                // Calcular tiempo de escritura para respuesta de redirección
+                await chat.sendStateTyping();
+                const typingTime = calculateTypingTime(response.length);
+                console.log(`   ⌨️ Escribiendo redirección (${response.length} chars): ${Math.round(typingTime)}ms`);
+                await new Promise(resolve => setTimeout(resolve, typingTime));
 
-                await message.reply(respuesta);
+                await message.reply(response);
                 console.log('   ✅ Respuesta enviada con datos del estudiante');
                 
                 // Enviar notificación al departamento
@@ -627,7 +709,7 @@ Tu mensaje será atendido en el próximo horario hábil. ¡Gracias! 😊`);
                 
             } else {
                 // No se pudieron extraer los datos, solicitar de nuevo con ejemplo
-                await message.reply(`❌ No pude extraer todos los datos. Por favor, envíalos en este formato:
+                response = `❌ No pude extraer todos los datos. Por favor, envíalos en este formato:
 
 📝 **Ejemplo correcto:**
 \`\`\`
@@ -639,7 +721,14 @@ Ingeniería de Sistemas
 O separados por comas:
 \`\`\`
 1234567, Juan Pérez, Medicina
-\`\`\``);
+\`\`\``;
+                
+                await chat.sendStateTyping();
+                const typingTime = calculateTypingTime(response.length);
+                console.log(`   ⌨️ Escribiendo error (${response.length} chars): ${Math.round(typingTime)}ms`);
+                await new Promise(resolve => setTimeout(resolve, typingTime));
+                
+                await message.reply(response);
             }
             
         } else {
