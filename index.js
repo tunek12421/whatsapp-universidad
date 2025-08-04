@@ -12,12 +12,14 @@ const openai = new OpenAI({
 });
 
 // ========== CONFIGURACIÓN ANTI-BLOQUEO ==========
-// Delays para parecer más humano
+// Delays para parecer más humano (aumentados para ser más naturales)
 const DELAYS = {
-    MIN_RESPONSE_TIME: 2000,  // 2 segundos mínimo
-    MAX_RESPONSE_TIME: 4000,  // 4 segundos máximo
-    TYPING_TIME: 2500,        // 2.5 segundos "escribiendo"
-    READ_TIME: 800,           // 0.8 segundos para "leer"
+    MIN_RESPONSE_TIME: 4000,  // 4 segundos mínimo
+    MAX_RESPONSE_TIME: 8000,  // 8 segundos máximo
+    TYPING_TIME: 5000,        // 5 segundos "escribiendo"
+    READ_TIME: 2000,          // 2 segundos para "leer"
+    READ_TIME_PER_CHAR: 100,  // 100ms por carácter
+    MAX_READ_TIME: 6000,      // Máximo 6 segundos leyendo
 };
 
 // Límites diarios (ajustados para tu caso)
@@ -31,6 +33,32 @@ const LIMITES = {
 const rateLimiter = new Map();
 let dailyMessageCount = 0;
 let lastResetDate = new Date().toDateString();
+
+// Sistema de recopilación de datos del estudiante
+const studentDataCollection = new Map();
+
+// Estados de conversación
+const CONVERSATION_STATES = {
+    INITIAL: 'initial',
+    WAITING_CI: 'waiting_ci',
+    WAITING_NAME: 'waiting_name',
+    WAITING_CAREER: 'waiting_career',
+    READY_TO_REDIRECT: 'ready_to_redirect'
+};
+
+// Lista de carreras disponibles
+const CARRERAS_DISPONIBLES = [
+    "Ingeniería de Sistemas",
+    "Ingeniería Industrial",
+    "Ingeniería Civil",
+    "Administración de Empresas",
+    "Contaduría Pública",
+    "Derecho",
+    "Medicina",
+    "Psicología",
+    "Arquitectura",
+    "Comunicación Social"
+];
 
 // Mensajes variados para parecer más natural
 const SALUDOS = [
@@ -95,6 +123,111 @@ function isBusinessHours() {
     if (day >= 1 && day <= 5 && hour >= 8 && hour < 18) return true;
     if (day === 6 && hour >= 8 && hour < 12) return true; // Sábados medio día
     return false;
+}
+
+// ========== FUNCIONES DE RECOPILACIÓN DE DATOS ==========
+
+function getStudentData(phoneNumber) {
+    return studentDataCollection.get(phoneNumber) || {
+        state: CONVERSATION_STATES.INITIAL,
+        ci: null,
+        nombreCompleto: null,
+        carrera: null,
+        consultaOriginal: null,
+        departamentoAsignado: null
+    };
+}
+
+function updateStudentData(phoneNumber, updates) {
+    const currentData = getStudentData(phoneNumber);
+    const updatedData = { ...currentData, ...updates };
+    studentDataCollection.set(phoneNumber, updatedData);
+    return updatedData;
+}
+
+// Validaciones simplificadas
+function parseStudentData(message) {
+    // Buscar patrones simples en el mensaje
+    const lines = message.split('\n').map(line => line.trim()).filter(line => line);
+    
+    if (lines.length >= 3) {
+        // Si tiene 3 o más líneas, asumir que es CI, Nombre, Carrera
+        return {
+            ci: lines[0],
+            nombreCompleto: lines[1],
+            carrera: lines[2],
+            valid: true
+        };
+    }
+    
+    // Buscar patrones con separadores comunes
+    const separators = [',', '|', '-', ';'];
+    for (const sep of separators) {
+        if (message.includes(sep)) {
+            const parts = message.split(sep).map(p => p.trim()).filter(p => p);
+            if (parts.length >= 3) {
+                return {
+                    ci: parts[0],
+                    nombreCompleto: parts[1],
+                    carrera: parts[2],
+                    valid: true
+                };
+            }
+        }
+    }
+    
+    return { valid: false };
+}
+
+function findBestCareerMatch(career) {
+    const careerLower = career.toLowerCase().trim();
+    
+    // Buscar coincidencia exacta
+    const exactMatch = CARRERAS_DISPONIBLES.find(c => c.toLowerCase() === careerLower);
+    if (exactMatch) return exactMatch;
+    
+    // Buscar coincidencia parcial
+    const partialMatch = CARRERAS_DISPONIBLES.find(c => 
+        c.toLowerCase().includes(careerLower) || careerLower.includes(c.toLowerCase())
+    );
+    
+    return partialMatch || career; // Si no encuentra coincidencia, usa lo que escribió el usuario
+}
+
+function generateDataCollectionMessage(departamento) {
+    const saludo = getRandomElement(SALUDOS);
+    const dept = DEPARTAMENTOS[departamento];
+    
+    return `${saludo} Para conectarte con ${dept.nombre}, necesito algunos datos.
+
+📝 Por favor envíame en tu siguiente mensaje:
+
+**1. Tu CI** (ej: 1234567)
+**2. Tu nombre completo** (ej: Juan Pérez García)  
+**3. Tu carrera** (ej: Ingeniería de Sistemas)
+
+_Puedes escribir cada dato en una línea separada o separados por comas._
+
+💡 Ejemplo:
+\`\`\`
+1234567-LP
+Juan Pérez García
+Ingeniería de Sistemas
+\`\`\`
+
+O también:
+\`\`\`
+1234567, Juan Pérez, Medicina
+\`\`\``;
+}
+
+function generateCareerList() {
+    let message = "📚 *CARRERAS DISPONIBLES:*\n\n";
+    CARRERAS_DISPONIBLES.forEach((carrera, index) => {
+        message += `${index + 1}. ${carrera}\n`;
+    });
+    message += "\n💡 Escribe el nombre de tu carrera tal como aparece en la lista.";
+    return message;
 }
 
 // Configuración de departamentos y sus números de WhatsApp
@@ -174,12 +307,23 @@ try {
     console.log('ℹ️  Dashboard no configurado (opcional)');
 }
 
-// Cliente de WhatsApp
+// Cliente de WhatsApp con configuración optimizada para WSL
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
         headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--no-first-run',
+            '--no-zygote',
+            '--single-process', // Importante para WSL
+            '--disable-gpu',
+            '--disable-web-security',
+            '--disable-features=VizDisplayCompositor'
+        ]
     }
 });
 
@@ -231,8 +375,8 @@ async function clasificarMensaje(mensaje) {
     }
 }
 
-// Función mejorada para generar mensaje de redirección con variaciones
-function generarMensajeRedireccion(departamento, mensajeOriginal) {
+// Función mejorada para generar mensaje de redirección con enlace directo
+function generarMensajeRedireccion(departamento, mensajeOriginal, studentData = null) {
     const saludo = getRandomElement(SALUDOS);
     const transicion = getRandomElement(TRANSICIONES);
     
@@ -268,35 +412,93 @@ Por favor, indícame si necesitas ayuda con:
     }
 
     const dept = DEPARTAMENTOS[departamento];
+    
+    // Crear mensaje codificado para URL con datos del estudiante
+    let mensajeParaDepartamento = `🔔 Nueva consulta estudiantil\n\n`;
+    
+    if (studentData && studentData.ci && studentData.nombreCompleto && studentData.carrera) {
+        mensajeParaDepartamento += `👤 *DATOS DEL ESTUDIANTE:*\n`;
+        mensajeParaDepartamento += `📋 CI: ${studentData.ci}\n`;
+        mensajeParaDepartamento += `🎓 Nombre: ${studentData.nombreCompleto}\n`;
+        mensajeParaDepartamento += `📚 Carrera: ${studentData.carrera}\n\n`;
+    }
+    
+    mensajeParaDepartamento += `📝 Consulta: "${mensajeOriginal}"\n`;
+    mensajeParaDepartamento += `🏷️ Clasificación: ${departamento}\n\n`;
+    mensajeParaDepartamento += `Por favor, atender a la brevedad.`;
+    
+    const mensajeCodificado = encodeURIComponent(mensajeParaDepartamento);
+    
+    // Generar enlace directo de WhatsApp
+    const enlaceWhatsApp = `https://wa.me/${dept.numero}?text=${mensajeCodificado}`;
+    
+    let datosEnviados = '';
+    if (studentData && studentData.ci && studentData.nombreCompleto && studentData.carrera) {
+        datosEnviados = `\n✅ *Datos enviados:*\n📋 CI: ${studentData.ci}\n🎓 Nombre: ${studentData.nombreCompleto}\n📚 Carrera: ${studentData.carrera}\n`;
+    }
+    
     const mensajesRedireccion = [
         `${saludo} ${transicion} te voy a conectar con ${dept.nombre}.
 
-📱 *Número directo:* ${dept.numero}
-📝 *Tu consulta:* "${mensajeOriginal}"
+📋 *${dept.nombre}*
+📝 *Tu consulta:* "${mensajeOriginal}"${datosEnviados}
 
-Un representante te atenderá a la brevedad.
+🔗 *Haz clic aquí para ir al chat:*
+${enlaceWhatsApp}
+
+También puedes copiar este número: ${dept.numero}
 
 ⏰ *Horario:* Lun-Vie 8:00-18:00 | Sáb 8:00-12:00`,
 
         `${saludo} ${transicion} necesitas comunicarte con ${dept.nombre}.
 
-Te comparto el contacto:
-📱 *WhatsApp:* ${dept.numero}
-💬 *Motivo:* "${mensajeOriginal}"
+Te comparto el enlace directo:
+🔗 ${enlaceWhatsApp}
+
+💬 *Tu consulta:* "${mensajeOriginal}"${datosEnviados}
+📱 *WhatsApp directo:* ${dept.numero}
 
 Ellos podrán ayudarte con tu consulta.
-
 *Atención:* L-V 8am-6pm | S 8am-12pm`
     ];
     
     return {
         respuesta: getRandomElement(mensajesRedireccion),
         redirigir: true,
-        numeroDestino: dept.numero
+        numeroDestino: dept.numero,
+        enlaceWhatsApp: enlaceWhatsApp
     };
 }
 
-// Manejo de mensajes con medidas anti-bloqueo
+// Función adicional para enviar notificación automática al departamento
+async function notificarDepartamento(client, numeroDepartamento, mensajeOriginal, numeroEstudiante, studentData = null) {
+    try {
+        let mensajeNotificacion = `🔔 *Nueva consulta estudiantil*\n\n`;
+        
+        if (studentData && studentData.ci && studentData.nombreCompleto && studentData.carrera) {
+            mensajeNotificacion += `👤 *DATOS DEL ESTUDIANTE:*\n`;
+            mensajeNotificacion += `📋 CI: ${studentData.ci}\n`;
+            mensajeNotificacion += `🎓 Nombre: ${studentData.nombreCompleto}\n`;
+            mensajeNotificacion += `📚 Carrera: ${studentData.carrera}\n`;
+            mensajeNotificacion += `📱 WhatsApp: wa.me/${numeroEstudiante}\n\n`;
+        } else {
+            mensajeNotificacion += `👤 *Estudiante:* wa.me/${numeroEstudiante}\n`;
+        }
+        
+        mensajeNotificacion += `📅 *Fecha/Hora:* ${new Date().toLocaleString('es-BO')}\n`;
+        mensajeNotificacion += `💬 *Consulta:* "${mensajeOriginal}"\n\n`;
+        mensajeNotificacion += `_El estudiante ha sido notificado para contactar directamente._`;
+
+        // Enviar notificación al departamento
+        await client.sendMessage(numeroDepartamento + '@c.us', mensajeNotificacion);
+        console.log(`   ✅ Notificación enviada a ${numeroDepartamento}`);
+        
+    } catch (error) {
+        console.error('❌ Error enviando notificación al departamento:', error);
+    }
+}
+
+// Manejo de mensajes con medidas anti-bloqueo y recopilación de datos
 client.on('message', async (message) => {
     // Ignorar mensajes propios y de grupos
     if (message.fromMe || message.from.includes('@g.us')) return;
@@ -318,7 +520,6 @@ client.on('message', async (message) => {
     
     // Verificar límite por usuario
     if (!checkRateLimit(message.from)) {
-        // Esperar un poco y enviar mensaje de límite
         await new Promise(resolve => setTimeout(resolve, 2000));
         await message.reply('Por favor, espera unos minutos antes de enviar otro mensaje. Gracias por tu comprensión. 🙏');
         return;
@@ -338,73 +539,133 @@ Tu mensaje será atendido en el próximo horario hábil. ¡Gracias! 😊`);
 
     try {
         const chat = await message.getChat();
+        const phoneNumber = message.from;
+        const messageText = message.body.trim();
         
-        // Simular tiempo de lectura del mensaje
-        const readTime = Math.min(message.body.length * 50, 2000); // 50ms por carácter, max 2s
+        // Obtener datos actuales del estudiante
+        let studentData = getStudentData(phoneNumber);
+        
+        // Simular tiempo de lectura más natural
+        const readTime = Math.min(messageText.length * DELAYS.READ_TIME_PER_CHAR, DELAYS.MAX_READ_TIME);
+        console.log(`   ⏱️ Simulando lectura: ${readTime}ms`);
         await new Promise(resolve => setTimeout(resolve, readTime));
         
-        // Mostrar "escribiendo..." con delay natural
         await chat.sendStateTyping();
-        
-        // Simular tiempo de escritura
-        const typingTime = getRandomDelay(DELAYS.TYPING_TIME - 500, DELAYS.TYPING_TIME + 500);
+        const typingTime = getRandomDelay(DELAYS.TYPING_TIME - 1000, DELAYS.TYPING_TIME + 2000);
+        console.log(`   ⌨️ Simulando escritura: ${typingTime}ms`);
         await new Promise(resolve => setTimeout(resolve, typingTime));
 
-        // Clasificar el mensaje
-        const departamento = await clasificarMensaje(message.body);
-        console.log(`   Departamento asignado: ${departamento}`);
-        
-        // Pequeño delay adicional aleatorio
-        await new Promise(resolve => setTimeout(resolve, getRandomDelay(500, 1000)));
+        // Manejar comando especial para ver carreras
+        if (messageText.toLowerCase() === 'carreras') {
+            await message.reply(generateCareerList());
+            return;
+        }
 
-        // Generar respuesta
-        const { respuesta, redirigir, numeroDestino } = generarMensajeRedireccion(departamento, message.body);
+        // Procesar según el estado de la conversación (flujo simplificado)
+        if (studentData.state === CONVERSATION_STATES.INITIAL) {
+            // Primer mensaje: Clasificar y solicitar datos si es necesario
+            const departamento = await clasificarMensaje(messageText);
+            console.log(`   Departamento asignado: ${departamento}`);
+            
+            if (departamento === 'GENERAL') {
+                // Mensaje general, no necesita datos del estudiante
+                const { respuesta } = generarMensajeRedireccion(departamento, messageText);
+                await message.reply(respuesta);
+            } else {
+                // Necesita redirección, solicitar datos en un solo mensaje
+                studentData = updateStudentData(phoneNumber, {
+                    state: CONVERSATION_STATES.WAITING_CI, // Reutilizamos este estado
+                    consultaOriginal: messageText,
+                    departamentoAsignado: departamento
+                });
+                
+                const response = generateDataCollectionMessage(departamento);
+                await message.reply(response);
+            }
+            
+        } else if (studentData.state === CONVERSATION_STATES.WAITING_CI) {
+            // Segundo mensaje: Intentar extraer todos los datos
+            const parsedData = parseStudentData(messageText);
+            
+            if (parsedData.valid) {
+                // Datos encontrados, procesar redirección
+                console.log('   ✅ Datos del estudiante extraídos correctamente');
+                
+                studentData.ci = parsedData.ci;
+                studentData.nombreCompleto = parsedData.nombreCompleto;
+                studentData.carrera = findBestCareerMatch(parsedData.carrera);
+                studentData.state = CONVERSATION_STATES.READY_TO_REDIRECT;
+                
+                // Delay adicional antes de la redirección
+                await new Promise(resolve => setTimeout(resolve, getRandomDelay(2000, 4000)));
+                
+                const { respuesta, redirigir, numeroDestino } = generarMensajeRedireccion(
+                    studentData.departamentoAsignado, 
+                    studentData.consultaOriginal,
+                    studentData
+                );
 
-        // Enviar respuesta
-        await message.reply(respuesta);
-        console.log('   ✅ Respuesta enviada');
+                await message.reply(respuesta);
+                console.log('   ✅ Respuesta enviada con datos del estudiante');
+                
+                // Enviar notificación al departamento
+                if (redirigir && numeroDestino) {
+                    console.log(`   🔄 Enviando notificación con datos completos a ${studentData.departamentoAsignado}`);
+                    
+                    await new Promise(resolve => setTimeout(resolve, getRandomDelay(3000, 6000)));
+                    const numeroEstudiante = phoneNumber.replace('@c.us', '');
+                    
+                    await notificarDepartamento(client, numeroDestino, studentData.consultaOriginal, numeroEstudiante, studentData);
+                    
+                    if (typeof registrarMensaje === 'function') {
+                        registrarMensaje(phoneNumber, studentData.consultaOriginal, studentData.departamentoAsignado, true);
+                    }
+                }
+                
+                // Limpiar datos del estudiante después de la redirección
+                studentDataCollection.delete(phoneNumber);
+                
+            } else {
+                // No se pudieron extraer los datos, solicitar de nuevo con ejemplo
+                await message.reply(`❌ No pude extraer todos los datos. Por favor, envíalos en este formato:
+
+📝 **Ejemplo correcto:**
+\`\`\`
+1234567-LP
+Juan Pérez García
+Ingeniería de Sistemas
+\`\`\`
+
+O separados por comas:
+\`\`\`
+1234567, Juan Pérez, Medicina
+\`\`\``);
+            }
+            
+        } else {
+            // Estado desconocido, reiniciar
+            console.log('   🔄 Estado desconocido, reiniciando conversación');
+            studentDataCollection.delete(phoneNumber);
+            await message.reply(`${getRandomElement(SALUDOS)} ¡Hola! ¿En qué puedo ayudarte?`);
+        }
         
-        // Registrar en monitor si existe
+        // Registrar actividad en monitor
         if (monitor) {
             monitor.logActivity('message_sent', {
-                from: message.from,
-                department: departamento,
+                from: phoneNumber,
+                state: studentData.state,
                 responseTime: Date.now() - message.timestamp * 1000
             });
         }
+        
         // Incrementar contador diario
         dailyMessageCount++;
         console.log(`   📊 Mensajes hoy: ${dailyMessageCount}/${LIMITES.MAX_MESSAGES_PER_DAY}`);
-
-        // Si es necesario redirigir, preparar notificación al departamento
-        if (redirigir && numeroDestino) {
-            console.log(`   🔄 Preparando redirección a ${departamento}`);
-            
-            // Esperar un momento antes de notificar al departamento
-            await new Promise(resolve => setTimeout(resolve, 3000));
-            
-            const mensajeParaDepartamento = `*🔔 Nueva consulta estudiantil*
-            
-👤 *Estudiante:* ${message.from}
-📅 *Fecha/Hora:* ${new Date().toLocaleString('es-BO')}
-💬 *Consulta:* "${message.body}"
-🏷️ *Clasificación:* ${departamento}
-
-_Por favor atender a la brevedad._`;
-
-            // Opcional: Enviar notificación al departamento
-            // await client.sendMessage(numeroDestino + '@c.us', mensajeParaDepartamento);
-            
-            // Guardar en base de datos si está configurado
-            if (typeof registrarMensaje === 'function') {
-                registrarMensaje(message.from, message.body, departamento);
-            }
-        }
+        console.log(`   📋 Estado conversación: ${studentData.state}`);
 
     } catch (error) {
         console.error('❌ Error procesando mensaje:', error);
         
-        // Registrar error en monitor
         if (monitor) {
             monitor.logActivity('message_failed', {
                 from: message.from,
@@ -412,9 +673,11 @@ _Por favor atender a la brevedad._`;
             });
         }
         
-        // Esperar antes de enviar mensaje de error
         await new Promise(resolve => setTimeout(resolve, 2000));
-        await message.reply('Disculpa, tuve un problema procesando tu mensaje. Por favor, intenta nuevamente en unos momentos o contacta directamente al departamento que necesitas.');
+        await message.reply('Disculpa, tuve un problema procesando tu mensaje. Por favor, intenta nuevamente escribiendo "hola" para reiniciar.');
+        
+        // Limpiar datos en caso de error
+        studentDataCollection.delete(message.from);
     }
 });
 
