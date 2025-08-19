@@ -10,7 +10,7 @@ const npmCommand = isWindows ? 'npm.cmd' : 'npm';
 
 // Iniciar bot de WhatsApp
 console.log('📱 Iniciando Bot de WhatsApp...');
-const whatsappBot = spawn('node', ['index.js'], {
+const whatsappBot = spawn('node', ['src/bot.js'], {
     stdio: 'inherit',
     shell: true
 });
@@ -18,7 +18,7 @@ const whatsappBot = spawn('node', ['index.js'], {
 // Esperar 5 segundos antes de iniciar el panel
 setTimeout(() => {
     console.log('\n📊 Iniciando Panel de Administración...');
-    const adminPanel = spawn('node', ['admin-dashboard.js'], {
+    const adminPanel = spawn('node', ['src/admin-dashboard.js'], {
         stdio: 'inherit',
         shell: true
     });

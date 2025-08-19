@@ -2,14 +2,14 @@
   "name": "whatsapp-universidad",
   "version": "1.0.0",
   "description": "Sistema de WhatsApp con IA para redirección de consultas universitarias",
-  "main": "index.js",
+  "main": "src/bot.js",
   "scripts": {
-    "start": "node start.js",
-    "bot": "node index.js",
-    "admin": "node admin-dashboard.js",
-    "monitor": "node monitor.js",
+    "start": "node src/start.js",
+    "bot": "node src/bot.js",
+    "admin": "node src/admin-dashboard.js",
+    "monitor": "node src/monitor.js",
     "dev": "concurrently \"npm run bot\" \"npm run admin\"",
-    "health": "node monitor.js",
+    "health": "node src/monitor.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [

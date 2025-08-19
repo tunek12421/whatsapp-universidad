@@ -40,6 +40,39 @@ let lastResetDate = new Date().toDateString();
 // Sistema de recopilación de datos del estudiante
 const studentDataCollection = new Map();
 
+// Sistema de control de mensajes duplicados
+const processedMessages = new Map();
+
+// Sistema de control de procesamiento concurrente
+const processingUsers = new Set();
+
+// Función para generar ID único del mensaje
+function getMessageId(message) {
+    return `${message.from}_${message.timestamp || Date.now()}_${message.body.slice(0, 20)}_${message.id?._serialized || 'no-id'}`;
+}
+
+// Función para verificar y marcar mensaje como procesado
+function isMessageProcessed(messageId) {
+    const now = Date.now();
+    const expirationTime = 5 * 60 * 1000; // 5 minutos
+    
+    // Limpiar mensajes antiguos
+    for (const [id, timestamp] of processedMessages.entries()) {
+        if (now - timestamp > expirationTime) {
+            processedMessages.delete(id);
+        }
+    }
+    
+    // Verificar si ya fue procesado
+    if (processedMessages.has(messageId)) {
+        return true;
+    }
+    
+    // Marcar como procesado
+    processedMessages.set(messageId, now);
+    return false;
+}
+
 // Estados de conversación
 const CONVERSATION_STATES = {
     INITIAL: 'initial',
@@ -578,6 +611,23 @@ client.on('message', async (message) => {
         console.log('⚠️ Mensaje vacío ignorado');
         return;
     }
+    
+    // Verificar duplicados
+    const messageId = getMessageId(message);
+    console.log(`🔍 ID del mensaje: ${messageId}`);
+    if (isMessageProcessed(messageId)) {
+        console.log('🔄 Mensaje duplicado ignorado');
+        return;
+    }
+    
+    // Verificar procesamiento concurrente del mismo usuario
+    if (processingUsers.has(message.from)) {
+        console.log('🔄 Usuario ya siendo procesado, ignorando mensaje duplicado');
+        return;
+    }
+    
+    // Marcar usuario como en procesamiento
+    processingUsers.add(message.from);
 
     console.log(`\n📨 Nuevo mensaje de ${message.from}:`);
     console.log(`   Mensaje: "${message.body}"`);
@@ -585,6 +635,7 @@ client.on('message', async (message) => {
     // Verificar límite diario
     if (!checkDailyLimit()) {
         console.log('⚠️ Límite diario alcanzado (seguridad)');
+        processingUsers.delete(message.from);
         return;
     }
     
@@ -592,6 +643,7 @@ client.on('message', async (message) => {
     if (!checkRateLimit(message.from)) {
         await new Promise(resolve => setTimeout(resolve, 2000));
         await message.reply('Por favor, espera unos minutos antes de enviar otro mensaje. Gracias por tu comprensión. 🙏');
+        processingUsers.delete(message.from);
         return;
     }
     
@@ -604,6 +656,7 @@ client.on('message', async (message) => {
 📅 Sábados: 8:00 - 12:00
 
 Tu mensaje será atendido en el próximo horario hábil. ¡Gracias! 😊`);
+        processingUsers.delete(message.from);
         return;
     }
 
@@ -623,6 +676,7 @@ Tu mensaje será atendido en el próximo horario hábil. ¡Gracias! 😊`);
         // Manejar comando especial para ver carreras
         if (messageText.toLowerCase() === 'carreras') {
             await message.reply(generateCareerList());
+            processingUsers.delete(message.from);
             return;
         }
 
@@ -767,6 +821,9 @@ O separados por comas:
         
         // Limpiar datos en caso de error
         studentDataCollection.delete(message.from);
+    } finally {
+        // Liberar usuario del procesamiento concurrente
+        processingUsers.delete(message.from);
     }
 });
 
